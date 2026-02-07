@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pizarra Táctica Digital Pro</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;600;800&display=swap" rel="stylesheet">
+    
+    <!-- Iconos -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Barlow', sans-serif;
+            overflow: hidden; 
+            touch-action: none;
+        }
+
+        .bg-tech-pattern {
+            background-color: #0f172a;
+            background-image: radial-gradient(#1e293b 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+
+        .field-container {
+            perspective: 1000px;
+            box-shadow: 0 0 50px rgba(0,0,0,0.5);
+            transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1), width 0.5s, height 0.5s;
+            transform-origin: center center;
+            position: absolute; 
+        }
+
+        .player-token {
+            cursor: grab;
+            transition: transform 0.1s, box-shadow 0.2s, left 0.1s, top 0.1s;
+            user-select: none;
+            touch-action: none;
+            z-index: 50;
+        }
+
+        .player-rotated {
+             transform: translate(-50%, -50%) rotate(90deg) !important;
+        }
+        .player-rotated.is-dragging {
+             transform: translate(-50%, -50%) rotate(90deg) scale(1.3) !important;
+        }
+
+        .player-token.is-dragging {
+            cursor: grabbing;
+            transform: translate(-50%, -50%) scale(1.3);
+            z-index: 100;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        svg {
+            transition: viewBox 0.5s ease;
+        }
+
+        @keyframes popIn {
+            0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+        .animate-pop {
+            animation: popIn 0.3s forwards;
+        }
+    </style>
+</head>
+<body class="bg-tech-pattern text-slate-200 h-screen w-screen flex flex-col">
+
+    <!-- Header -->
+    <header class="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-2 md:px-6 shadow-lg z-50 shrink-0 gap-2 md:gap-4">
+        
+        <div class="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
+            <div class="flex items-center gap-2 shrink-0">
+                <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">
+                    <i class="fa-solid fa-chess-board"></i>
+                </div>
+                <h1 class="text-lg font-bold tracking-wider text-white uppercase hidden xl:block">Tactics<span class="text-blue-500">Pro</span></h1>
+            </div>
+
+            <div class="h-8 w-px bg-slate-700 mx-1 md:mx-2 hidden sm:block"></div>
+
+            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
+                <button onclick="setViewMode('full')" id="btn-view-full" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm" title="Campo Completo">
+                    <i class="fa-solid fa-expand md:mr-1"></i> <span class="hidden md:inline">Completo</span>
+                </button>
+                <button onclick="setViewMode('half')" id="btn-view-half" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" title="Media Cancha (Auto)">
+                    <i class="fa-solid fa-arrows-up-down md:mr-1"></i> <span class="hidden md:inline">Media</span>
+                </button>
+            </div>
+            
+            <!-- Selector Deporte con margen extra a la izquierda (ml-2 md:ml-6) -->
+            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0 ml-2 md:ml-6">
+                 <button onclick="setSport('futsal')" id="btn-sport-futsal" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow" title="Fútbol Sala">
+                    <i class="fa-solid fa-futbol"></i>
+                    <span class="hidden md:inline">Futsal</span>
+                </button>
+                <button onclick="setSport('basketball')" id="btn-sport-basket" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-amber-500" title="Baloncesto">
+                    <i class="fa-solid fa-basketball"></i>
+                    <span class="hidden md:inline">Basket</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700 shadow-inner shrink-0">
+            <div class="generator-token w-8 h-8 rounded-full bg-blue-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
+                 draggable="true" ondragstart="handleDragStart(event, 'A', 'auto')" onclick="addPlayerClick('A', 'auto')">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+            </div>
+             <div class="generator-token w-7 h-7 rounded-full bg-amber-400 border border-slate-800 shadow-lg flex items-center justify-center text-slate-900"
+                 draggable="true" ondragstart="handleDragStart(event, 'Ball', '')" onclick="addPlayerClick('Ball', '')">
+                 <i class="fa-solid fa-futbol text-xs"></i>
+             </div>
+            <div class="generator-token w-8 h-8 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
+                 draggable="true" ondragstart="handleDragStart(event, 'B', 'auto')" onclick="addPlayerClick('B', 'auto')">
+                <i class="fa-solid fa-plus text-[10px]"></i>
+            </div>
+        </div>
+
+        <div class="flex gap-2">
+            <button onclick="saveTactic()" class="w-8 h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center justify-center shadow transition-colors" title="Guardar">
+                <i class="fa-solid fa-floppy-disk"></i>
+            </button>
+            <button onclick="loadTactic()" class="w-8 h-8 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center justify-center shadow transition-colors" title="Cargar">
+                <i class="fa-solid fa-cloud-arrow-down"></i>
+            </button>
+            <button onclick="clearField()" class="w-8 h-8 bg-red-900/80 hover:bg-red-800 text-white rounded flex items-center justify-center shadow transition-colors" title="Limpiar">
+                <i class="fa-solid fa-trash-can"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- Área Principal -->
+    <main class="flex-1 relative overflow-hidden flex flex-col items-center justify-center bg-slate-900/50">
+        
+        <div id="canvas-area" class="w-full h-full p-0 md:p-2 flex items-center justify-center relative overflow-hidden">
+            <div id="field-container" class="field-container bg-slate-800 rounded shadow-2xl border-4 border-slate-700 select-none overflow-hidden">
+                
+                <!-- SVG Futsal -->
+                <svg id="field-futsal" class="w-full h-full absolute inset-0 transition-all duration-500" viewBox="0 0 800 500" preserveAspectRatio="none">
+                    <rect width="800" height="500" fill="#3b82f6" fill-opacity="0.1"/>
+                    <g stroke="white" stroke-width="3" fill="none" opacity="0.8">
+                        <rect x="25" y="25" width="750" height="450" />
+                        <line x1="400" y1="25" x2="400" y2="475" />
+                        <circle cx="400" cy="250" r="50" />
+                        <path d="M 25 150 Q 100 150 100 250 Q 100 350 25 350" />
+                        <path d="M 775 150 Q 700 150 700 250 Q 700 350 775 350" />
+                        <circle cx="100" cy="250" r="3" fill="white" stroke="none"/>
+                        <circle cx="700" cy="250" r="3" fill="white" stroke="none"/>
+                    </g>
+                </svg>
+
+                <!-- SVG Basket -->
+                <svg id="field-basketball" class="w-full h-full absolute inset-0 hidden transition-all duration-500" viewBox="0 0 800 500" preserveAspectRatio="none">
+                    <rect width="800" height="500" fill="#d97706" fill-opacity="0.15"/>
+                    <defs>
+                         <pattern id="woodPattern" width="20" height="20" patternUnits="userSpaceOnUse">
+                             <path d="M0 10 L20 10" stroke="#b45309" stroke-width="0.5" opacity="0.3"/>
+                         </pattern>
+                    </defs>
+                    <rect width="800" height="500" fill="url(#woodPattern)"/>
+                    <g stroke="white" stroke-width="3" fill="none" opacity="0.9">
+                        <rect x="25" y="25" width="750" height="450" />
+                        <line x1="400" y1="25" x2="400" y2="475" />
+                        <circle cx="400" cy="250" r="50" />
+                        <rect x="25" y="190" width="120" height="120" />
+                        <circle cx="145" cy="250" r="40" stroke-dasharray="5,5" />
+                        <path d="M 25 60 L 120 60 Q 250 250 120 440 L 25 440" />
+                        <rect x="655" y="190" width="120" height="120" />
+                        <circle cx="655" cy="250" r="40" stroke-dasharray="5,5" />
+                        <path d="M 775 60 L 680 60 Q 550 250 680 440 L 775 440" />
+                    </g>
+                </svg>
+
+                <!-- Capa Jugadores -->
+                <div id="players-layer" class="absolute inset-0 z-10 transition-all duration-500 origin-left"></div>
+            </div>
+        </div>
+
+    </main>
+    
+    <!-- Toast -->
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-slate-600 text-white px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 -translate-y-40 opacity-0 z-50 flex items-center gap-3">
+        <i class="fa-solid fa-circle-check text-emerald-400"></i>
+        <span id="toast-msg">Notificación</span>
+    </div>
+
+    <script>
+        // --- Estado ---
+        const state = {
+            sport: 'futsal',
+            viewMode: 'full', 
+            activeHalf: 'left', // 'left' o 'right' (Calculado automáticamente)
+            players: [],
+            nextId: 1
+        };
+
+        const canvasArea = document.getElementById('canvas-area');
+        const fieldContainer = document.getElementById('field-container');
+        const playersLayer = document.getElementById('players-layer');
+
+        // Constantes del Campo Lógico (Fuente de Verdad)
+        const FULL_WIDTH = 800;
+        const HALF_VIEW_WIDTH = 460; 
+
+        // Factor de Conversión de escala horizontal
+        const SCALE_RATIO = FULL_WIDTH / HALF_VIEW_WIDTH;
+
+        function init() {
+            fieldContainer.addEventListener('dragover', (e) => e.preventDefault());
+            fieldContainer.addEventListener('drop', handleDropFromToolbar);
+            fieldContainer.addEventListener('contextmenu', (e) => e.preventDefault());
+            
+            window.addEventListener('resize', () => {
+                clearTimeout(window.resizeTimer);
+                window.resizeTimer = setTimeout(updateFieldZoom, 100);
+            });
+
+            setTimeout(updateFieldZoom, 50);
+            renderPlayers();
+            showToast('Arrastra fuera para eliminar');
+        }
+
+        // --- Vista Dinámica ---
+        function setViewMode(mode) {
+            state.viewMode = mode;
+            
+            // Detección Automática del Lado
+            if (mode === 'half') {
+                detectActiveHalf();
+            } else {
+                state.activeHalf = 'left'; // Reset a default en full
+            }
+            
+            const btnFull = document.getElementById('btn-view-full');
+            const btnHalf = document.getElementById('btn-view-half');
+            
+            if (mode === 'full') {
+                btnFull.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm';
+                btnHalf.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+            } else {
+                btnFull.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white';
+                btnHalf.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm';
+                
+                showToast(state.activeHalf === 'right' ? 'Mostrando Lado Derecho' : 'Mostrando Lado Izquierdo');
+            }
+
+            updateFieldZoom();
+            // Re-renderizamos para actualizar posiciones CSS
+            renderPlayers();
+        }
+
+        function detectActiveHalf() {
+            if (state.players.length === 0) {
+                state.activeHalf = 'left';
+                return;
+            }
+
+            let sumX = 0;
+            let count = 0;
+            state.players.forEach(p => {
+                // Solo contamos jugadores de campo, ignoramos balones para el promedio si queremos,
+                // pero mejor contar todo para que la vista siga la acción.
+                sumX += p.x;
+                count++;
+            });
+
+            const avgX = sumX / count;
+            
+            // Si el promedio está más allá del 50%, mostramos la derecha
+            state.activeHalf = avgX > 50 ? 'right' : 'left';
+        }
+
+        function updatePlayerRotationClasses() {
+            const tokens = document.querySelectorAll('.player-token');
+            tokens.forEach(el => {
+                if (state.viewMode === 'half') {
+                    el.classList.add('player-rotated');
+                } else {
+                    el.classList.remove('player-rotated');
+                }
+            });
+        }
+
+        function updateFieldZoom() {
+            const svgs = ['field-futsal', 'field-basketball'];
+            
+            // 1. ViewBox del SVG
+            let viewBox;
+            if (state.viewMode === 'full') {
+                viewBox = `0 0 ${FULL_WIDTH} 500`;
+            } else {
+                // Half Mode
+                if (state.activeHalf === 'right') {
+                    // Mostramos desde el final menos el ancho de la vista (800 - 460 = 340) hasta 800
+                    const startX = FULL_WIDTH - HALF_VIEW_WIDTH; // 340
+                    viewBox = `${startX} 0 ${HALF_VIEW_WIDTH} 500`;
+                } else {
+                    // Left Side
+                    viewBox = `0 0 ${HALF_VIEW_WIDTH} 500`;
+                }
+            }
+            
+            svgs.forEach(id => {
+                const el = document.getElementById(id);
+                if (el) el.setAttribute('viewBox', viewBox);
+            });
+
+            // Geometría para maximizar
+            const availW = canvasArea.clientWidth - (state.viewMode === 'full' ? 32 : 16); 
+            const availH = canvasArea.clientHeight - (state.viewMode === 'full' ? 32 : 16);
+
+            let targetW, targetH, rotation;
+
+            if (state.viewMode === 'half') {
+                // MODO VERTICAL (-90deg)
+                const visualRatio = 500 / HALF_VIEW_WIDTH; 
+                const screenRatio = availW / availH;
+
+                let renderW, renderH; // Dimensiones visuales finales deseadas
+                
+                if (screenRatio > visualRatio) {
+                    renderH = availH;
+                    renderW = renderH * visualRatio;
+                } else {
+                    renderW = availW;
+                    renderH = renderW / visualRatio;
+                }
+                
+                targetW = renderH; 
+                targetH = renderW;
+                rotation = 'rotate(-90deg)';
+
+            } else {
+                // MODO FULL
+                const visualRatio = FULL_WIDTH / 500;
+                const screenRatio = availW / availH;
+
+                if (screenRatio > visualRatio) {
+                    targetH = availH;
+                    targetW = targetH * visualRatio;
+                } else {
+                    targetW = availW;
+                    targetH = targetW / visualRatio;
+                }
+                rotation = 'none';
+            }
+
+            fieldContainer.style.width = `${targetW}px`;
+            fieldContainer.style.height = `${targetH}px`;
+            fieldContainer.style.transform = rotation;
+            
+            updatePlayerRotationClasses();
+        }
+
+        function setSport(sportName) {
+            state.sport = sportName;
+            const btnFutsal = document.getElementById('btn-sport-futsal');
+            const btnBasket = document.getElementById('btn-sport-basket');
+            
+            // Actualización de clases para incluir soporte de texto y espaciado (gap-2, px-3, py-1)
+            btnFutsal.className = sportName === 'futsal' 
+                ? 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow' 
+                : 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-blue-400';
+            
+            btnBasket.className = sportName === 'basketball' 
+                ? 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-amber-600 text-white shadow' 
+                : 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-amber-500';
+
+            document.getElementById('field-futsal').classList.toggle('hidden', sportName !== 'futsal');
+            document.getElementById('field-basketball').classList.toggle('hidden', sportName !== 'basketball');
+            fieldContainer.style.backgroundColor = sportName === 'futsal' ? '#1e3a8a' : '#78350f';
+        }
+
+        function getNextPlayerNumber(teamType) {
+            const usedNumbers = state.players
+                .filter(p => p.type === teamType)
+                .map(p => typeof p.number === 'string' ? parseInt(p.number) : p.number)
+                .filter(n => !isNaN(n));
+            let i = 1;
+            while (true) {
+                if (!usedNumbers.includes(i)) return i;
+                i++;
+            }
+        }
+
+        // --- Core Jugadores ---
+        function createPlayer(type, number, xPercent, yPercent) {
+            let finalNumber = number;
+            if (number === 'auto') finalNumber = getNextPlayerNumber(type);
+
+            const player = {
+                id: state.nextId++,
+                type: type,
+                number: finalNumber,
+                x: xPercent, // SIEMPRE guardamos respecto a 800x500
+                y: yPercent
+            };
+            state.players.push(player);
+            renderOnePlayer(player);
+        }
+
+        function addPlayerClick(type, number) {
+            // Añadir en el centro lógico del campo visible actual
+            let centerX = 50;
+            
+            if (state.viewMode === 'half') {
+                if (state.activeHalf === 'right') {
+                    // Centro de la derecha (aprox 75%)
+                    // Exacto: Centro de 340-800 es (340+800)/2 = 570. 570/800 = 71.25%
+                    centerX = 71.25;
+                } else {
+                    // Centro de la izquierda (aprox 25%)
+                    centerX = 28.75;
+                }
+            }
+            
+            const rand = () => (Math.random() * 6) - 3;
+            createPlayer(type, number, centerX + rand(), 50 + rand());
+        }
+
+        function renderOnePlayer(player) {
+            let el = document.getElementById(`player-${player.id}`);
+            if (!el) {
+                el = document.createElement('div');
+                el.id = `player-${player.id}`;
+                el.className = `player-token absolute w-10 h-10 md:w-12 md:h-12 rounded-full flex items-center justify-center font-bold text-white shadow-md border-2 border-white select-none animate-pop text-base md:text-lg`;
+                
+                if (player.type === 'A') el.classList.add('bg-blue-600');
+                else if (player.type === 'B') el.classList.add('bg-red-600');
+                else {
+                    el.className = `player-token absolute w-6 h-6 md:w-7 md:h-7 rounded-full flex items-center justify-center bg-amber-400 border border-slate-800 shadow-sm animate-pop`;
+                    el.innerHTML = '<i class="fa-solid fa-futbol text-slate-900 text-xs"></i>';
+                }
+
+                if (player.type !== 'Ball') el.innerText = player.number;
+                
+                el.addEventListener('mousedown', (e) => startMoving(e, player.id, false));
+                el.addEventListener('touchstart', (e) => startMoving(e, player.id, true), {passive: false});
+                
+                playersLayer.appendChild(el);
+            }
+
+            // --- LÓGICA DE POSICIONAMIENTO VISUAL ---
+            let cssLeft = player.x;
+            
+            if (state.viewMode === 'half') {
+                // Cálculo especial para media cancha
+                if (state.activeHalf === 'right') {
+                    // Mapeamos el rango 340-800 (lógico) a 0-100% (visual container)
+                    // Container Width = 460 units.
+                    // X units relative to view = PlayerLogicalXUnits - 340.
+                    // Visual % = (PlayerLogicalXUnits - 340) / 460 * 100
+                    
+                    const logicalUnits = (player.x / 100) * FULL_WIDTH; // De 0 a 800
+                    const visualPct = ((logicalUnits - (FULL_WIDTH - HALF_VIEW_WIDTH)) / HALF_VIEW_WIDTH) * 100;
+                    cssLeft = visualPct;
+                    
+                } else {
+                    // Left Mode: Mapeamos 0-460 a 0-100%
+                    cssLeft = player.x * SCALE_RATIO;
+                }
+                el.classList.add('player-rotated');
+            } else {
+                el.classList.remove('player-rotated');
+            }
+
+            el.style.left = `${cssLeft}%`;
+            el.style.top = `${player.y}%`;
+        }
+
+        function renderPlayers() {
+            playersLayer.innerHTML = '';
+            state.players.forEach(renderOnePlayer);
+        }
+
+        function removePlayer(id) {
+            state.players = state.players.filter(p => p.id !== id);
+            const el = document.getElementById(`player-${id}`);
+            if (el) {
+                el.style.transition = "transform 0.2s, opacity 0.2s";
+                el.style.transform = "translate(-50%, -50%) scale(0)";
+                el.style.opacity = "0";
+                setTimeout(() => el.remove(), 200);
+            }
+        }
+
+        function clearField() {
+            if(confirm("¿Limpiar pizarra?")) {
+                state.players = [];
+                renderPlayers();
+            }
+        }
+
+        // --- Movimiento y Lógica de Rotación ---
+        let activePlayerId = null;
+        let isTouch = false;
+
+        function handleDragStart(e, type, number) {
+            e.dataTransfer.setData('text/plain', JSON.stringify({ type, number }));
+        }
+
+        function handleDropFromToolbar(e) {
+            e.preventDefault();
+            try {
+                const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                const rect = fieldContainer.getBoundingClientRect(); 
+                let x = e.clientX - rect.left;
+                let y = e.clientY - rect.top;
+                
+                const coords = calculateCoordinates(x, y, rect.width, rect.height);
+                createPlayer(data.type, data.number, coords.x, coords.y);
+            } catch (err) {}
+        }
+
+        function startMoving(e, id, touchMode) {
+            if (!touchMode && e.button !== 0) return;
+            e.stopPropagation();
+
+            activePlayerId = id;
+            isTouch = touchMode;
+            
+            const el = document.getElementById(`player-${id}`);
+            if(el) el.classList.add('is-dragging');
+
+            if (touchMode) {
+                window.addEventListener('touchmove', movePlayerTouch, {passive: false});
+                window.addEventListener('touchend', stopMoving);
+            } else {
+                window.addEventListener('mousemove', movePlayerMouse);
+                window.addEventListener('mouseup', stopMoving);
+            }
+        }
+
+        function movePlayerMouse(e) {
+            if (activePlayerId === null) return;
+            handleMove(e.clientX, e.clientY);
+        }
+
+        function movePlayerTouch(e) {
+            if (activePlayerId === null) return;
+            e.preventDefault();
+            const touch = e.touches[0];
+            handleMove(touch.clientX, touch.clientY);
+        }
+
+        // Función matemática unificada: Visual (Pixels) -> Lógico (% de 800)
+        function calculateCoordinates(visualX, visualY, width, height) {
+            let logicalXPercent, logicalYPercent;
+
+            if (state.viewMode === 'half') {
+                // MODO VERTICAL (-90deg)
+                
+                const visualPctX = (visualX / width) * 100;
+                const visualPctY = (visualY / height) * 100;
+
+                // 1. Mapeo inverso de rotación -90deg
+                let containerX = 100 - visualPctY; 
+                let containerY = visualPctX;
+
+                // 2. Normalización a Campo Completo (800)
+                if (state.activeHalf === 'right') {
+                    // Container representa 340 a 800 (460 ancho)
+                    // 0% container = 340 units
+                    // 100% container = 800 units
+                    // Units = (containerX / 100 * 460) + 340
+                    const logicalUnits = (containerX / 100 * HALF_VIEW_WIDTH) + (FULL_WIDTH - HALF_VIEW_WIDTH);
+                    logicalXPercent = (logicalUnits / FULL_WIDTH) * 100;
+                } else {
+                    // Left Mode
+                    logicalXPercent = containerX / SCALE_RATIO;
+                }
+                
+                logicalYPercent = containerY;
+
+            } else {
+                // MODO HORIZONTAL (Estándar)
+                logicalXPercent = (visualX / width) * 100;
+                logicalYPercent = (visualY / height) * 100;
+            }
+            
+            return { x: logicalXPercent, y: logicalYPercent };
+        }
+
+        function handleMove(clientX, clientY) {
+            const rect = fieldContainer.getBoundingClientRect(); 
+            let visualX = clientX - rect.left;
+            let visualY = clientY - rect.top;
+
+            const coords = calculateCoordinates(visualX, visualY, rect.width, rect.height);
+
+            // Actualización visual durante el arrastre
+            let cssLeft = coords.x;
+            
+            if (state.viewMode === 'half') {
+                if (state.activeHalf === 'right') {
+                    const logicalUnits = (coords.x / 100) * FULL_WIDTH; 
+                    const visualPct = ((logicalUnits - (FULL_WIDTH - HALF_VIEW_WIDTH)) / HALF_VIEW_WIDTH) * 100;
+                    cssLeft = visualPct;
+                } else {
+                    cssLeft = coords.x * SCALE_RATIO;
+                }
+            }
+
+            const el = document.getElementById(`player-${activePlayerId}`);
+            if (el) {
+                el.style.left = `${cssLeft}%`;
+                el.style.top = `${coords.y}%`;
+            }
+        }
+
+        function stopMoving(e) {
+            if (activePlayerId === null) return;
+
+            const el = document.getElementById(`player-${activePlayerId}`);
+            if(el) el.classList.remove('is-dragging');
+
+            let clientX = isTouch ? e.changedTouches[0].clientX : e.clientX;
+            let clientY = isTouch ? e.changedTouches[0].clientY : e.clientY;
+
+            // Verificar si soltó fuera
+            const fieldRect = fieldContainer.getBoundingClientRect();
+            const isInside = (clientX >= fieldRect.left && clientX <= fieldRect.right &&
+                              clientY >= fieldRect.top && clientY <= fieldRect.bottom);
+
+            if (!isInside) {
+                removePlayer(activePlayerId);
+            } else {
+                if(el) {
+                    const coords = calculateCoordinates(clientX - fieldRect.left, clientY - fieldRect.top, fieldRect.width, fieldRect.height);
+                    
+                    const pIndex = state.players.findIndex(p => p.id === activePlayerId);
+                    if (pIndex !== -1) {
+                        state.players[pIndex].x = coords.x;
+                        state.players[pIndex].y = coords.y;
+                    }
+                    
+                    renderOnePlayer(state.players[pIndex]);
+                }
+            }
+
+            activePlayerId = null;
+            isTouch = false;
+            
+            window.removeEventListener('mousemove', movePlayerMouse);
+            window.removeEventListener('mouseup', stopMoving);
+            window.removeEventListener('touchmove', movePlayerTouch);
+            window.removeEventListener('touchend', stopMoving);
+        }
+
+        function saveTactic() {
+            const dataToSave = {
+                sport: state.sport,
+                players: state.players,
+                nextId: state.nextId
+            };
+            localStorage.setItem('tacticalBoardData', JSON.stringify(dataToSave));
+            showToast('Táctica guardada');
+        }
+
+        function loadTactic() {
+            const saved = localStorage.getItem('tacticalBoardData');
+            if (saved) {
+                const data = JSON.parse(saved);
+                state.sport = data.sport;
+                state.players = data.players || [];
+                state.nextId = data.nextId || 1;
+                setSport(state.sport);
+                setViewMode('full'); 
+                renderPlayers();
+                showToast('Táctica cargada');
+            } else {
+                showToast('No hay datos');
+            }
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            const msgEl = document.getElementById('toast-msg');
+            msgEl.innerText = msg;
+            toast.classList.remove('-translate-y-40', 'opacity-0');
+            setTimeout(() => {
+                toast.classList.add('-translate-y-40', 'opacity-0');
+            }, 3000);
+        }
+
+        init();
+    </script>
+</body>
+</html>
