@@ -149,69 +149,75 @@
 <body class="bg-tech-pattern text-slate-200 h-screen w-screen flex flex-col">
 
     <!-- Header -->
-    <header class="h-16 bg-slate-900 border-b border-slate-700 flex items-center justify-between px-2 md:px-6 shadow-lg z-50 shrink-0 gap-2 md:gap-4">
+    <!-- MODIFICADO: Quitamos altura fija y flex directo del header. Añadimos padding-top dinámico para "Safe Area" (Notch) -->
+    <header class="bg-slate-900 border-b border-slate-700 shadow-lg z-50 shrink-0 pt-[env(safe-area-inset-top)]">
         
-        <!-- Izquierda: Selectores de Deporte y Vista (Reordenados) -->
-        <div class="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
+        <!-- Nuevo contenedor interno que mantiene la altura de 16 (64px) y la distribución Flex -->
+        <div class="h-16 flex items-center justify-between px-2 md:px-6 gap-2 md:gap-4 w-full">
             
-            <!-- 1. Selector Deporte (Ahora primero) -->
-            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
-                 <button onclick="setSport('futsal')" id="btn-sport-futsal" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow" title="Fútbol Sala">
-                    <i class="fa-solid fa-futbol"></i>
-                    <span class="hidden md:inline">Futsal</span>
-                </button>
-                <button onclick="setSport('basketball')" id="btn-sport-basket" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-amber-500" title="Baloncesto">
-                    <i class="fa-solid fa-basketball"></i>
-                    <span class="hidden md:inline">Basket</span>
-                </button>
+            <!-- Izquierda: Selectores de Deporte y Vista (Reordenados) -->
+            <div class="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
+                
+                <!-- 1. Selector Deporte (Ahora primero) -->
+                <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
+                     <button onclick="setSport('futsal')" id="btn-sport-futsal" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow" title="Fútbol Sala">
+                        <i class="fa-solid fa-futbol"></i>
+                        <span class="hidden md:inline">Futsal</span>
+                    </button>
+                    <button onclick="setSport('basketball')" id="btn-sport-basket" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-amber-500" title="Baloncesto">
+                        <i class="fa-solid fa-basketball"></i>
+                        <span class="hidden md:inline">Basket</span>
+                    </button>
+                </div>
+
+                <!-- Separador -->
+                <div class="h-8 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+
+                <!-- 2. Selector Vista (Ahora segundo) -->
+                <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
+                    <button onclick="setViewMode('full')" id="btn-view-full" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm" title="Campo Completo">
+                        <i class="fa-solid fa-expand md:mr-1"></i> <span class="hidden md:inline">Completo</span>
+                    </button>
+                    <button onclick="setViewMode('half')" id="btn-view-half" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" title="Media Cancha (Auto)">
+                        <i class="fa-solid fa-arrows-up-down md:mr-1"></i> <span class="hidden md:inline">Media</span>
+                    </button>
+                </div>
+                
             </div>
 
-            <!-- Separador -->
-            <div class="h-8 w-px bg-slate-700 mx-1 hidden sm:block"></div>
+            <div class="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700 shadow-inner shrink-0">
+                <div class="generator-token w-8 h-8 rounded-full bg-blue-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
+                     draggable="true" ondragstart="handleDragStart(event, 'A', 'auto')" onclick="addPlayerClick('A', 'auto')">
+                    <i class="fa-solid fa-plus text-[10px]"></i>
+                </div>
+                 <div class="generator-token w-7 h-7 rounded-full bg-amber-400 border border-slate-800 shadow-lg flex items-center justify-center text-slate-900"
+                     draggable="true" ondragstart="handleDragStart(event, 'Ball', '')" onclick="addPlayerClick('Ball', '')">
+                     <i class="fa-solid fa-futbol text-xs"></i>
+                 </div>
+                <div class="generator-token w-8 h-8 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
+                     draggable="true" ondragstart="handleDragStart(event, 'B', 'auto')" onclick="addPlayerClick('B', 'auto')">
+                    <i class="fa-solid fa-plus text-[10px]"></i>
+                </div>
+            </div>
 
-            <!-- 2. Selector Vista (Ahora segundo) -->
-            <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
-                <button onclick="setViewMode('full')" id="btn-view-full" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm" title="Campo Completo">
-                    <i class="fa-solid fa-expand md:mr-1"></i> <span class="hidden md:inline">Completo</span>
+            <div class="flex gap-2">
+                <!-- BOTÓN INSTALAR PWA (Solo visible si no está instalada) -->
+                <button id="btn-install-pwa" onclick="promptInstall()" class="hidden w-8 h-8 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center shadow transition-colors animate-pulse" title="Instalar App">
+                    <i class="fa-solid fa-download"></i>
                 </button>
-                <button onclick="setViewMode('half')" id="btn-view-half" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white" title="Media Cancha (Auto)">
-                    <i class="fa-solid fa-arrows-up-down md:mr-1"></i> <span class="hidden md:inline">Media</span>
+
+                <button onclick="saveTactic()" class="w-8 h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center justify-center shadow transition-colors" title="Guardar">
+                    <i class="fa-solid fa-floppy-disk"></i>
+                </button>
+                <button onclick="loadTactic()" class="w-8 h-8 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center justify-center shadow transition-colors" title="Cargar">
+                    <i class="fa-solid fa-cloud-arrow-down"></i>
+                </button>
+                <button onclick="clearField()" class="w-8 h-8 bg-red-900/80 hover:bg-red-800 text-white rounded flex items-center justify-center shadow transition-colors" title="Limpiar">
+                    <i class="fa-solid fa-trash-can"></i>
                 </button>
             </div>
-            
-        </div>
-
-        <div class="flex items-center gap-2 bg-slate-800/50 px-3 py-1.5 rounded-full border border-slate-700 shadow-inner shrink-0">
-            <div class="generator-token w-8 h-8 rounded-full bg-blue-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
-                 draggable="true" ondragstart="handleDragStart(event, 'A', 'auto')" onclick="addPlayerClick('A', 'auto')">
-                <i class="fa-solid fa-plus text-[10px]"></i>
-            </div>
-             <div class="generator-token w-7 h-7 rounded-full bg-amber-400 border border-slate-800 shadow-lg flex items-center justify-center text-slate-900"
-                 draggable="true" ondragstart="handleDragStart(event, 'Ball', '')" onclick="addPlayerClick('Ball', '')">
-                 <i class="fa-solid fa-futbol text-xs"></i>
-             </div>
-            <div class="generator-token w-8 h-8 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center font-bold text-white text-sm"
-                 draggable="true" ondragstart="handleDragStart(event, 'B', 'auto')" onclick="addPlayerClick('B', 'auto')">
-                <i class="fa-solid fa-plus text-[10px]"></i>
-            </div>
-        </div>
-
-        <div class="flex gap-2">
-            <!-- BOTÓN INSTALAR PWA (Solo visible si no está instalada) -->
-            <button id="btn-install-pwa" onclick="promptInstall()" class="hidden w-8 h-8 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center shadow transition-colors animate-pulse" title="Instalar App">
-                <i class="fa-solid fa-download"></i>
-            </button>
-
-            <button onclick="saveTactic()" class="w-8 h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center justify-center shadow transition-colors" title="Guardar">
-                <i class="fa-solid fa-floppy-disk"></i>
-            </button>
-            <button onclick="loadTactic()" class="w-8 h-8 bg-slate-700 hover:bg-slate-600 text-white rounded flex items-center justify-center shadow transition-colors" title="Cargar">
-                <i class="fa-solid fa-cloud-arrow-down"></i>
-            </button>
-            <button onclick="clearField()" class="w-8 h-8 bg-red-900/80 hover:bg-red-800 text-white rounded flex items-center justify-center shadow transition-colors" title="Limpiar">
-                <i class="fa-solid fa-trash-can"></i>
-            </button>
-        </div>
+        
+        </div> <!-- Fin contenedor interno -->
     </header>
 
     <!-- Área Principal -->
