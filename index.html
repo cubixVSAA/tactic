@@ -23,16 +23,14 @@
     <!-- PWA Loader Script -->
     <script>
         (function() {
-            // Icono SVG Vectorizado del Logotipo (3 figuras)
+            // Icono SVG: Silbato Deportivo
             const iconSvg = `
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
                 <rect width="512" height="512" rx="100" fill="#0f172a"/>
-                <!-- Cabezas -->
-                <circle cx="256" cy="100" r="45" fill="#3b82f6"/>
-                <circle cx="130" cy="180" r="45" fill="#3b82f6"/>
-                <circle cx="382" cy="180" r="45" fill="#3b82f6"/>
-                <!-- Cuerpo / Flecha -->
-                <path d="M256 160 L400 300 V420 H340 V320 L256 240 L172 320 V420 H112 V300 Z" fill="#3b82f6"/>
+                <path d="M190 356 a 100 100 0 1 1 0 -200 h 180 v 100 h -120 v 100 z" fill="#3b82f6"/>
+                <circle cx="190" cy="256" r="35" fill="#0f172a"/>
+                <circle cx="190" cy="275" r="15" fill="#3b82f6" opacity="0.8"/>
+                <path d="M370 156 q 30 -40 70 0" stroke="#3b82f6" stroke-width="20" fill="none" stroke-linecap="round"/>
             </svg>`;
             
             const iconUrl = "data:image/svg+xml;base64," + btoa(iconSvg);
@@ -63,9 +61,6 @@
             appleIcon.rel = 'apple-touch-icon';
             appleIcon.href = iconUrl;
             document.head.appendChild(appleIcon);
-
-            // NOTA: Se ha eliminado el registro del Service Worker para evitar errores 
-            // de protocolo 'blob:' en entornos sandboxed/iframe.
         })();
     </script>
 
@@ -76,7 +71,6 @@
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
-            /* Prevención de pull-to-refresh en móvil */
             overscroll-behavior: none;
         }
 
@@ -94,19 +88,24 @@
             position: absolute; 
         }
 
+        /* --- ESTILOS DE JUGADOR Y ROTACIÓN ROBUSTA --- */
+        
         .player-token {
             cursor: grab;
             transition: transform 0.1s, box-shadow 0.2s, left 0.1s, top 0.1s;
             user-select: none;
             touch-action: none;
             z-index: 50;
-            transform: translate(-50%, -50%);
+            transform: translate(-50%, -50%); /* Base: Sin rotación */
         }
 
+        /* CUANDO EL CAMPO ESTÁ ROTADO (Modo Vertical) */
+        /* Aplicamos rotación a TODOS los hijos player-token automáticamente desde CSS */
         .field-container.rotated-view .player-token {
             transform: translate(-50%, -50%) rotate(90deg);
         }
 
+        /* Estado Dragging (Normal) */
         .player-token.is-dragging {
             cursor: grabbing;
             transform: translate(-50%, -50%) scale(1.3) !important;
@@ -114,17 +113,38 @@
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
         }
 
+        /* Estado Dragging (Rotado) - Mantiene la rotación + Escala */
         .field-container.rotated-view .player-token.is-dragging {
             transform: translate(-50%, -50%) rotate(90deg) scale(1.3) !important;
         }
 
-        svg { transition: viewBox 0.5s ease; }
+        /* --- FIN ESTILOS JUGADOR --- */
+
+        #trash-zone {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(150%);
+        }
+        #trash-zone.visible {
+            transform: translateY(0);
+        }
+        #trash-zone.drag-over {
+            transform: translateY(0) scale(1.1);
+            background-color: #ef4444;
+            border-color: #fca5a5;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+        }
+
+        svg {
+            transition: viewBox 0.5s ease;
+        }
 
         @keyframes popIn {
             0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
             100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
-        .animate-pop { animation: popIn 0.3s forwards; }
+        .animate-pop {
+            animation: popIn 0.3s forwards;
+        }
 
         /* Modal de Instrucciones iOS */
         #ios-install-modal {
@@ -149,16 +169,21 @@
 <body class="bg-tech-pattern text-slate-200 h-screen w-screen flex flex-col">
 
     <!-- Header -->
-    <!-- MODIFICADO: Quitamos altura fija y flex directo del header. Añadimos padding-top dinámico para "Safe Area" (Notch) -->
     <header class="bg-slate-900 border-b border-slate-700 shadow-lg z-50 shrink-0 pt-[env(safe-area-inset-top)]">
         
-        <!-- Nuevo contenedor interno que mantiene la altura de 16 (64px) y la distribución Flex -->
         <div class="h-16 flex items-center justify-between px-2 md:px-6 gap-2 md:gap-4 w-full">
             
-            <!-- Izquierda: Selectores de Deporte y Vista (Reordenados) -->
             <div class="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
                 
-                <!-- 1. Selector Deporte (Ahora primero) -->
+                <div class="w-8 h-8 flex items-center justify-center shrink-0 mr-2">
+                    <svg viewBox="0 0 512 512" class="w-full h-full text-blue-500 fill-current">
+                        <path d="M190 356 a 100 100 0 1 1 0 -200 h 180 v 100 h -120 v 100 z" />
+                        <circle cx="190" cy="256" r="35" fill="#0f172a"/>
+                        <circle cx="190" cy="275" r="15" opacity="0.8"/>
+                        <path d="M370 156 q 30 -40 70 0" stroke="currentColor" stroke-width="40" fill="none" stroke-linecap="round"/>
+                    </svg>
+                </div>
+
                 <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
                      <button onclick="setSport('futsal')" id="btn-sport-futsal" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow" title="Fútbol Sala">
                         <i class="fa-solid fa-futbol"></i>
@@ -170,10 +195,8 @@
                     </button>
                 </div>
 
-                <!-- Separador -->
                 <div class="h-8 w-px bg-slate-700 mx-1 hidden sm:block"></div>
 
-                <!-- 2. Selector Vista (Ahora segundo) -->
                 <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0">
                     <button onclick="setViewMode('full')" id="btn-view-full" class="px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm" title="Campo Completo">
                         <i class="fa-solid fa-expand md:mr-1"></i> <span class="hidden md:inline">Completo</span>
@@ -201,7 +224,6 @@
             </div>
 
             <div class="flex gap-2">
-                <!-- BOTÓN INSTALAR PWA (Solo visible si no está instalada) -->
                 <button id="btn-install-pwa" onclick="promptInstall()" class="hidden w-8 h-8 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center shadow transition-colors animate-pulse" title="Instalar App">
                     <i class="fa-solid fa-download"></i>
                 </button>
@@ -217,7 +239,7 @@
                 </button>
             </div>
         
-        </div> <!-- Fin contenedor interno -->
+        </div>
     </header>
 
     <!-- Área Principal -->
@@ -302,18 +324,13 @@
         const installBtn = document.getElementById('btn-install-pwa');
         const iosModal = document.getElementById('ios-install-modal');
 
-        // Detectar si ya está instalada (Standalone)
         const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
-        
-        // Detectar iOS
         const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
         if (!isStandalone) {
-            // Mostrar botón instalar
             installBtn.classList.remove('hidden');
         }
 
-        // Android / Desktop Chrome
         window.addEventListener('beforeinstallprompt', (e) => {
             e.preventDefault();
             deferredPrompt = e;
@@ -322,10 +339,8 @@
 
         function promptInstall() {
             if (isIos) {
-                // Mostrar instrucciones iOS
                 iosModal.style.display = 'block';
             } else if (deferredPrompt) {
-                // Prompt Nativo Android
                 deferredPrompt.prompt();
                 deferredPrompt.userChoice.then((choiceResult) => {
                     if (choiceResult.outcome === 'accepted') {
@@ -343,7 +358,7 @@
             sport: 'futsal',
             viewMode: 'full', 
             activeHalf: 'left', // 'left' o 'right'
-            isVertical: false, // Detecta si el campo debe renderizarse verticalmente
+            isVertical: false, 
             players: [],
             nextId: 1
         };
@@ -372,7 +387,6 @@
             setTimeout(updateFieldZoom, 50);
             renderPlayers();
             
-            // Mensaje inicial diferente si es PWA o Web
             if (isStandalone) {
                 showToast('Modo App Activo');
             }
@@ -417,13 +431,6 @@
             });
             const avgX = sumX / count;
             state.activeHalf = avgX > 50 ? 'right' : 'left';
-        }
-
-        function updatePlayerRotationClasses() {
-            const tokens = document.querySelectorAll('.player-token');
-            tokens.forEach(el => {
-                // NO TOCAR DOM, SOLO CLASES. El CSS maneja la rotación.
-            });
         }
 
         function updateFieldZoom() {
@@ -540,7 +547,41 @@
             }
         }
 
+        function canAddPlayer(type) {
+            if (type === 'Ball') {
+                const hasBall = state.players.some(p => p.type === 'Ball');
+                if (hasBall) {
+                    showToast("Solo se permite un balón");
+                    return false;
+                }
+                return true;
+            } else {
+                const count = state.players.filter(p => p.type === type).length;
+                if (count >= 5) {
+                    showToast("Máximo 5 jugadores por equipo");
+                    return false;
+                }
+                return true;
+            }
+        }
+
         function createPlayer(type, number, xPercent, yPercent) {
+            // Verificar límites antes de crear
+            if (type === 'Ball') {
+                // Si ya hay balón, lo movemos en lugar de crear uno nuevo (mejor UX)
+                const existingBall = state.players.find(p => p.type === 'Ball');
+                if (existingBall) {
+                    existingBall.x = xPercent;
+                    existingBall.y = yPercent;
+                    renderOnePlayer(existingBall); // Actualizar visualmente
+                    // showToast("Balón movido");
+                    return;
+                }
+            } else {
+                // Para jugadores, aplicamos límite estricto
+                if (!canAddPlayer(type)) return;
+            }
+
             let finalNumber = number;
             if (number === 'auto') finalNumber = getNextPlayerNumber(type);
 
@@ -640,11 +681,14 @@
             e.preventDefault();
             try {
                 const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+                
+                // --- LÓGICA DE DROP Y CREACIÓN ---
                 const rect = fieldContainer.getBoundingClientRect(); 
                 let x = e.clientX - rect.left;
                 let y = e.clientY - rect.top;
                 const coords = calculateCoordinates(x, y, rect.width, rect.height);
                 createPlayer(data.type, data.number, coords.x, coords.y);
+                
             } catch (err) {}
         }
 
@@ -671,7 +715,6 @@
                         const pRect = pEl.getBoundingClientRect();
                         const bRect = bEl.getBoundingClientRect();
                         
-                        // Centros en pixels
                         const pCx = pRect.left + pRect.width/2;
                         const pCy = pRect.top + pRect.height/2;
                         const bCx = bRect.left + bRect.width/2;
@@ -680,25 +723,15 @@
                         const dxPx = bCx - pCx;
                         const dyPx = bCy - pCy;
                         const distPx = Math.sqrt(dxPx*dxPx + dyPx*dyPx);
+                        const minDist = (pRect.width/2) + (bRect.width/2); 
                         
-                        // Radios
-                        const pR = pRect.width/2;
-                        const bR = bRect.width/2;
-                        const minDist = pR + bR; // Distancia de toque exacto
-                        
-                        // Umbral de activación (Toque + 25px de margen)
                         if (distPx < minDist + 25) {
-                            // Calcular offsets lógicos para el snap exacto
                             const fieldRect = fieldContainer.getBoundingClientRect();
                             const theta = Math.atan2(dyPx, dxPx);
-                            
-                            // Distancia deseada: Toque + 1px
                             const targetDistPx = minDist + 1;
-                            
                             const newDxPx = Math.cos(theta) * targetDistPx;
                             const newDyPx = Math.sin(theta) * targetDistPx;
                             
-                            // Calcular posición absoluta destino del balón
                             const targetBallVisualX = pCx + newDxPx - fieldRect.left;
                             const targetBallVisualY = pCy + newDyPx - fieldRect.top;
                             
@@ -713,13 +746,10 @@
                                 offsetY: logicalOffsetY
                             };
                             
-                            // Aplicar Snap Visual Inmediato
                             let snapX = player.x + logicalOffsetX;
                             let snapY = player.y + logicalOffsetY;
-                            
                             snapX = Math.max(0, Math.min(100, snapX));
                             snapY = Math.max(0, Math.min(100, snapY));
-                            
                             ball.x = snapX;
                             ball.y = snapY;
                             updateDOMPosition(ball.id, snapX, snapY);
@@ -786,17 +816,13 @@
 
             const coords = calculateCoordinates(visualX, visualY, rect.width, rect.height);
 
-            // Mover Jugador
             updateDOMPosition(activePlayerId, coords.x, coords.y);
 
-            // Mover Balón
             if (dribbleState) {
                 let ballX = coords.x + dribbleState.offsetX;
                 let ballY = coords.y + dribbleState.offsetY;
-                
                 ballX = Math.max(0, Math.min(100, ballX));
                 ballY = Math.max(0, Math.min(100, ballY));
-
                 updateDOMPosition(dribbleState.ballId, ballX, ballY);
                 dribbleState.lastX = ballX;
                 dribbleState.lastY = ballY;
@@ -812,14 +838,12 @@
             let clientX = isTouch ? e.changedTouches[0].clientX : e.clientX;
             let clientY = isTouch ? e.changedTouches[0].clientY : e.clientY;
 
-            // Verificar si se soltó fuera
             const fieldRect = fieldContainer.getBoundingClientRect();
             const isInside = (clientX >= fieldRect.left && clientX <= fieldRect.right &&
                               clientY >= fieldRect.top && clientY <= fieldRect.bottom);
 
             if (!isInside) {
                 removePlayer(activePlayerId);
-                // Si eliminamos conductor, actualizar balón
                 if (dribbleState && typeof dribbleState.lastX !== 'undefined') {
                      const bIndex = state.players.findIndex(p => p.id === dribbleState.ballId);
                      if (bIndex !== -1) {
@@ -830,14 +854,52 @@
                 }
             } else {
                 if(el) {
-                    const coords = calculateCoordinates(clientX - fieldRect.left, clientY - fieldRect.top, fieldRect.width, fieldRect.height);
+                    const movedObj = state.players.find(p => p.id === activePlayerId);
                     
+                    if (movedObj && movedObj.type === 'Ball') {
+                        const ballRect = el.getBoundingClientRect();
+                        const ballCenter = { x: ballRect.left + ballRect.width/2, y: ballRect.top + ballRect.height/2 };
+                        const ballRadius = ballRect.width / 2;
+
+                        let nearest = null;
+                        let minDist = Infinity;
+
+                        state.players.forEach(p => {
+                            if (p.type === 'Ball' || p.id === activePlayerId) return;
+                            const pEl = document.getElementById(`player-${p.id}`);
+                            if (!pEl) return;
+                            const pRect = pEl.getBoundingClientRect();
+                            const pCenter = { x: pRect.left + pRect.width/2, y: pRect.top + pRect.height/2 };
+                            const pRadius = pRect.width / 2;
+                            const dx = ballCenter.x - pCenter.x;
+                            const dy = ballCenter.y - pCenter.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            const minDistRequired = pRadius + ballRadius; 
+                            
+                            if (dist < minDistRequired + 15) { 
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearest = { pCenter, minDistRequired, dx, dy };
+                                }
+                            }
+                        });
+
+                        if (nearest) {
+                            const angle = Math.atan2(nearest.dy, nearest.dx);
+                            const targetDist = nearest.minDistRequired + 1; 
+                            const newBallScreenX = nearest.pCenter.x + Math.cos(angle) * targetDist;
+                            const newBallScreenY = nearest.pCenter.y + Math.sin(angle) * targetDist;
+                            clientX = newBallScreenX;
+                            clientY = newBallScreenY;
+                        }
+                    }
+
+                    const coords = calculateCoordinates(clientX - fieldRect.left, clientY - fieldRect.top, fieldRect.width, fieldRect.height);
                     const pIndex = state.players.findIndex(p => p.id === activePlayerId);
                     if (pIndex !== -1) {
                         state.players[pIndex].x = coords.x;
                         state.players[pIndex].y = coords.y;
                     }
-                    
                     if (dribbleState && typeof dribbleState.lastX !== 'undefined') {
                          const bIndex = state.players.findIndex(p => p.id === dribbleState.ballId);
                          if (bIndex !== -1) {
@@ -845,7 +907,6 @@
                              state.players[bIndex].y = dribbleState.lastY;
                          }
                     }
-                    
                     renderOnePlayer(state.players[pIndex]);
                 }
             }
