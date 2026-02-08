@@ -9,7 +9,7 @@
     <meta name="theme-color" content="#0f172a">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="description" content="Pizarra táctica profesional para deportes">
+    <meta name="apple-mobile-web-app-title" content="TacticsPro">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,6 +23,20 @@
     <!-- PWA Loader Script -->
     <script>
         (function() {
+            // Icono SVG Vectorizado del Logotipo (3 figuras)
+            const iconSvg = `
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+                <rect width="512" height="512" rx="100" fill="#0f172a"/>
+                <!-- Cabezas -->
+                <circle cx="256" cy="100" r="45" fill="#3b82f6"/>
+                <circle cx="130" cy="180" r="45" fill="#3b82f6"/>
+                <circle cx="382" cy="180" r="45" fill="#3b82f6"/>
+                <!-- Cuerpo / Flecha -->
+                <path d="M256 160 L400 300 V420 H340 V320 L256 240 L172 320 V420 H112 V300 Z" fill="#3b82f6"/>
+            </svg>`;
+            
+            const iconUrl = "data:image/svg+xml;base64," + btoa(iconSvg);
+
             const manifest = {
                 "name": "Pizarra Táctica Pro",
                 "short_name": "TacticsPro",
@@ -31,14 +45,15 @@
                 "background_color": "#0f172a",
                 "theme_color": "#0f172a",
                 "orientation": "any",
-                "icons": [{
-                    "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%230f172a'/%3E%3Ccircle cx='256' cy='256' r='180' fill='none' stroke='%233b82f6' stroke-width='40'/%3E%3Cpath d='M256 112v288M112 256h288' stroke='%233b82f6' stroke-width='40' stroke-linecap='round'/%3E%3C/svg%3E",
-                    "sizes": "192x192",
-                    "type": "image/svg+xml"
-                }]
+                "icons": [
+                    { "src": iconUrl, "sizes": "192x192", "type": "image/svg+xml" },
+                    { "src": iconUrl, "sizes": "512x512", "type": "image/svg+xml" }
+                ]
             };
+            
             const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
             const manifestURL = URL.createObjectURL(manifestBlob);
+            
             const link = document.createElement('link');
             link.rel = 'manifest';
             link.href = manifestURL;
@@ -46,7 +61,7 @@
 
             const appleIcon = document.createElement('link');
             appleIcon.rel = 'apple-touch-icon';
-            appleIcon.href = manifest.icons[0].src;
+            appleIcon.href = iconUrl;
             document.head.appendChild(appleIcon);
 
             if ('serviceWorker' in navigator) {
@@ -54,16 +69,11 @@
                     self.addEventListener('install', (e) => self.skipWaiting());
                     self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
                     self.addEventListener('fetch', (e) => {
-                        e.respondWith(fetch(e.request).catch(() => {
-                            return new Response('Modo Offline: Pizarra Activa');
-                        }));
+                        e.respondWith(fetch(e.request).catch(() => new Response('Offline')));
                     });
                 `;
                 const swBlob = new Blob([swCode], {type: 'text/javascript'});
-                const swUrl = URL.createObjectURL(swBlob);
-                window.addEventListener('load', () => {
-                    navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Error:', err));
-                });
+                navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(console.error);
             }
         })();
     </script>
@@ -75,6 +85,8 @@
             touch-action: none;
             -webkit-user-select: none;
             user-select: none;
+            /* Prevención de pull-to-refresh en móvil */
+            overscroll-behavior: none;
         }
 
         .bg-tech-pattern {
@@ -97,48 +109,50 @@
             user-select: none;
             touch-action: none;
             z-index: 50;
+            transform: translate(-50%, -50%);
         }
 
-        /* Clase para rotar jugadores cuando el campo está vertical */
-        .player-rotated {
-             transform: translate(-50%, -50%) rotate(90deg) !important;
-        }
-        .player-rotated.is-dragging {
-             transform: translate(-50%, -50%) rotate(90deg) scale(1.3) !important;
+        .field-container.rotated-view .player-token {
+            transform: translate(-50%, -50%) rotate(90deg);
         }
 
         .player-token.is-dragging {
             cursor: grabbing;
-            transform: translate(-50%, -50%) scale(1.3);
+            transform: translate(-50%, -50%) scale(1.3) !important;
             z-index: 100;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
         }
 
-        #trash-zone {
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            transform: translateY(150%);
-        }
-        #trash-zone.visible {
-            transform: translateY(0);
-        }
-        #trash-zone.drag-over {
-            transform: translateY(0) scale(1.1);
-            background-color: #ef4444;
-            border-color: #fca5a5;
-            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
+        .field-container.rotated-view .player-token.is-dragging {
+            transform: translate(-50%, -50%) rotate(90deg) scale(1.3) !important;
         }
 
-        svg {
-            transition: viewBox 0.5s ease;
-        }
+        svg { transition: viewBox 0.5s ease; }
 
         @keyframes popIn {
             0% { transform: translate(-50%, -50%) scale(0); opacity: 0; }
             100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
         }
-        .animate-pop {
-            animation: popIn 0.3s forwards;
+        .animate-pop { animation: popIn 0.3s forwards; }
+
+        /* Modal de Instrucciones iOS */
+        #ios-install-modal {
+            display: none;
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: rgba(15, 23, 42, 0.95);
+            backdrop-filter: blur(10px);
+            border-top: 1px solid #334155;
+            padding: 20px;
+            z-index: 1000;
+            animation: slideUp 0.3s ease-out;
         }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        
+        .bounce-arrow { animation: bounce 2s infinite; }
+        @keyframes bounce { 0%, 20%, 50%, 80%, 100% {transform: translateY(0);} 40% {transform: translateY(-10px);} 60% {transform: translateY(-5px);} }
     </style>
 </head>
 <body class="bg-tech-pattern text-slate-200 h-screen w-screen flex flex-col">
@@ -148,8 +162,16 @@
         
         <div class="flex items-center gap-2 md:gap-4 overflow-x-auto no-scrollbar">
             <div class="flex items-center gap-2 shrink-0">
-                <div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center font-bold text-white shadow-lg shadow-blue-500/30">
-                    <i class="fa-solid fa-chess-board"></i>
+                <!-- LOGOTIPO SVG INTEGRADO -->
+                <div class="w-8 h-8 flex items-center justify-center">
+                    <svg viewBox="0 0 512 512" class="w-full h-full text-blue-500 fill-current">
+                        <!-- Cabezas -->
+                        <circle cx="256" cy="100" r="45" />
+                        <circle cx="130" cy="180" r="45" />
+                        <circle cx="382" cy="180" r="45" />
+                        <!-- Cuerpo -->
+                        <path d="M256 160 L400 300 V420 H340 V320 L256 240 L172 320 V420 H112 V300 Z" />
+                    </svg>
                 </div>
                 <h1 class="text-lg font-bold tracking-wider text-white uppercase hidden xl:block">Tactics<span class="text-blue-500">Pro</span></h1>
             </div>
@@ -193,6 +215,11 @@
         </div>
 
         <div class="flex gap-2">
+            <!-- BOTÓN INSTALAR PWA (Solo visible si no está instalada) -->
+            <button id="btn-install-pwa" onclick="promptInstall()" class="hidden w-8 h-8 bg-indigo-600 hover:bg-indigo-500 text-white rounded flex items-center justify-center shadow transition-colors animate-pulse" title="Instalar App">
+                <i class="fa-solid fa-download"></i>
+            </button>
+
             <button onclick="saveTactic()" class="w-8 h-8 bg-emerald-600 hover:bg-emerald-500 text-white rounded flex items-center justify-center shadow transition-colors" title="Guardar">
                 <i class="fa-solid fa-floppy-disk"></i>
             </button>
@@ -255,13 +282,75 @@
     </main>
     
     <!-- Toast -->
-    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-slate-600 text-white px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 -translate-y-40 opacity-0 z-50 flex items-center gap-3">
+    <div id="toast" class="fixed top-20 left-1/2 transform -translate-x-1/2 bg-slate-800 border border-slate-600 text-white px-6 py-3 rounded-lg shadow-2xl transition-all duration-300 -translate-y-40 opacity-0 z-50 flex items-center gap-3 pointer-events-none">
         <i class="fa-solid fa-circle-check text-emerald-400"></i>
         <span id="toast-msg">Notificación</span>
     </div>
 
+    <!-- Modal Instrucciones iOS -->
+    <div id="ios-install-modal">
+        <div class="flex flex-col items-center text-center space-y-4 text-white">
+            <div class="flex justify-between w-full items-center">
+                <h3 class="font-bold text-lg">Instalar App</h3>
+                <button onclick="document.getElementById('ios-install-modal').style.display='none'" class="text-slate-400 hover:text-white"><i class="fa-solid fa-times"></i></button>
+            </div>
+            <p class="text-sm text-slate-300">Para instalar en tu iPhone/iPad:</p>
+            <div class="flex items-center gap-2 text-sm">
+                <span>1. Toca</span>
+                <i class="fa-solid fa-arrow-up-from-bracket text-blue-400 text-lg"></i>
+                <span><b>Compartir</b> abajo</span>
+            </div>
+            <div class="flex items-center gap-2 text-sm">
+                <span>2. Selecciona</span>
+                <span class="bg-slate-700 px-2 py-1 rounded border border-slate-500 flex items-center gap-1"><i class="fa-regular fa-square-plus"></i> Añadir a inicio</span>
+            </div>
+            <i class="fa-solid fa-arrow-down text-blue-500 text-2xl bounce-arrow mt-2"></i>
+        </div>
+    </div>
+
     <script>
-        // --- Estado ---
+        // --- PWA Logic (Prompt & Install) ---
+        let deferredPrompt;
+        const installBtn = document.getElementById('btn-install-pwa');
+        const iosModal = document.getElementById('ios-install-modal');
+
+        // Detectar si ya está instalada (Standalone)
+        const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+        
+        // Detectar iOS
+        const isIos = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+
+        if (!isStandalone) {
+            // Mostrar botón instalar
+            installBtn.classList.remove('hidden');
+        }
+
+        // Android / Desktop Chrome
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            installBtn.classList.remove('hidden');
+        });
+
+        function promptInstall() {
+            if (isIos) {
+                // Mostrar instrucciones iOS
+                iosModal.style.display = 'block';
+            } else if (deferredPrompt) {
+                // Prompt Nativo Android
+                deferredPrompt.prompt();
+                deferredPrompt.userChoice.then((choiceResult) => {
+                    if (choiceResult.outcome === 'accepted') {
+                        installBtn.classList.add('hidden');
+                    }
+                    deferredPrompt = null;
+                });
+            } else {
+                alert("Para instalar, busca la opción 'Añadir a pantalla de inicio' en el menú de tu navegador.");
+            }
+        }
+
+        // --- Estado App ---
         const state = {
             sport: 'futsal',
             viewMode: 'full', 
@@ -278,7 +367,6 @@
         const FULL_WIDTH = 800;
         const HALF_VIEW_WIDTH = 460; 
         const SCALE_RATIO = FULL_WIDTH / HALF_VIEW_WIDTH;
-        // Aspect Ratio del campo lógico 800/500 = 1.6
         const FIELD_RATIO = 1.6;
 
         let dribbleState = null;
@@ -295,7 +383,11 @@
 
             setTimeout(updateFieldZoom, 50);
             renderPlayers();
-            showToast('PWA: Instalable en móvil/tablet');
+            
+            // Mensaje inicial diferente si es PWA o Web
+            if (isStandalone) {
+                showToast('Modo App Activo');
+            }
         }
 
         // --- Vista Dinámica ---
@@ -317,7 +409,7 @@
             } else {
                 btnFull.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white';
                 btnHalf.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm';
-                showToast(state.activeHalf === 'right' ? 'Mostrando Lado Derecho' : 'Mostrando Lado Izquierdo');
+                showToast(state.activeHalf === 'right' ? 'Lado Derecho' : 'Lado Izquierdo');
             }
 
             updateFieldZoom();
@@ -342,18 +434,13 @@
         function updatePlayerRotationClasses() {
             const tokens = document.querySelectorAll('.player-token');
             tokens.forEach(el => {
-                if (state.isVertical) {
-                    el.classList.add('player-rotated');
-                } else {
-                    el.classList.remove('player-rotated');
-                }
+                // NO TOCAR DOM, SOLO CLASES. El CSS maneja la rotación.
             });
         }
 
         function updateFieldZoom() {
             const svgs = ['field-futsal', 'field-basketball'];
             
-            // 1. ViewBox del SVG
             let viewBox;
             if (state.viewMode === 'full') {
                 viewBox = `0 0 ${FULL_WIDTH} 500`;
@@ -374,29 +461,19 @@
             const availW = canvasArea.clientWidth - (state.viewMode === 'full' ? 16 : 8); 
             const availH = canvasArea.clientHeight - (state.viewMode === 'full' ? 16 : 8);
 
-            // DETECCIÓN DE ORIENTACIÓN
-            // Es vertical si la vista es 'half' o si el área disponible es más alta que ancha (móvil)
             state.isVertical = state.viewMode === 'half' || (availH > availW);
 
             let targetW, targetH, rotation;
 
             if (state.isVertical) {
-                // MODO VERTICAL (Rotado -90deg)
-                // Ratio visual:
-                // Si es Half mode: 500 / 460
-                // Si es Full mode (en móvil): 500 / 800 (porque el lado 500 es el ancho visual, y 800 el alto visual)
-                // No, el SVG sigue siendo el mismo.
-                // Si rotamos Full Field: El div ancho se vuelve altura visual.
-                // Ancho Visual = 500 units. Alto Visual = 800 units.
-                // Ratio = 500 / 800 = 0.625
-                
+                // Vertical Logic
                 let logicalW = 500;
                 let logicalH = state.viewMode === 'half' ? HALF_VIEW_WIDTH : FULL_WIDTH;
                 
                 const visualRatio = logicalW / logicalH; 
                 const screenRatio = availW / availH;
 
-                let renderW, renderH; // Dimensiones visuales finales deseadas
+                let renderW, renderH; 
                 
                 if (screenRatio > visualRatio) {
                     renderH = availH;
@@ -406,14 +483,12 @@
                     renderH = renderW / visualRatio;
                 }
                 
-                // Al rotar -90deg: Width CSS = renderH, Height CSS = renderW
                 targetW = renderH; 
                 targetH = renderW;
                 rotation = 'rotate(-90deg)';
                 
-                // Jugadores Layer
-                // Si es Half mode: Capa escalada (SCALE_RATIO %)
-                // Si es Full mode vertical: Capa normal 100%
+                fieldContainer.classList.add('rotated-view');
+                
                 if (state.viewMode === 'half') {
                     const scalePercent = (FULL_WIDTH / HALF_VIEW_WIDTH) * 100;
                     playersLayer.style.width = `${scalePercent}%`;
@@ -423,8 +498,7 @@
                 playersLayer.style.height = '100%';
 
             } else {
-                // MODO HORIZONTAL (Standard)
-                // Logical W = 800, H = 500
+                // Horizontal Logic
                 const visualRatio = FULL_WIDTH / 500;
                 const screenRatio = availW / availH;
 
@@ -437,6 +511,8 @@
                 }
                 rotation = 'none';
                 
+                fieldContainer.classList.remove('rotated-view');
+                
                 playersLayer.style.width = '100%';
                 playersLayer.style.height = '100%';
             }
@@ -444,8 +520,6 @@
             fieldContainer.style.width = `${targetW}px`;
             fieldContainer.style.height = `${targetH}px`;
             fieldContainer.style.transform = rotation;
-            
-            updatePlayerRotationClasses();
         }
 
         function setSport(sportName) {
@@ -478,7 +552,6 @@
             }
         }
 
-        // --- Core Jugadores ---
         function createPlayer(type, number, xPercent, yPercent) {
             let finalNumber = number;
             if (number === 'auto') finalNumber = getNextPlayerNumber(type);
@@ -508,8 +581,6 @@
             if (!el) return;
 
             let cssLeft = logicalX;
-            // Si estamos en half mode, hay que escalar la coordenada X visual
-            // Si estamos en full mode vertical, NO hay que escalar porque el contenedor es 100% lógico
             if (state.viewMode === 'half') {
                 if (state.activeHalf === 'right') {
                     const logicalUnits = (logicalX / 100) * FULL_WIDTH; 
@@ -544,13 +615,6 @@
                 
                 playersLayer.appendChild(el);
             }
-
-            if (state.isVertical) {
-                el.classList.add('player-rotated');
-            } else {
-                el.classList.remove('player-rotated');
-            }
-
             updateDOMPosition(player.id, player.x, player.y);
         }
 
@@ -577,7 +641,6 @@
             }
         }
 
-        // --- Movimiento y Lógica de Rotación ---
         let activePlayerId = null;
         let isTouch = false;
 
@@ -592,7 +655,6 @@
                 const rect = fieldContainer.getBoundingClientRect(); 
                 let x = e.clientX - rect.left;
                 let y = e.clientY - rect.top;
-                
                 const coords = calculateCoordinates(x, y, rect.width, rect.height);
                 createPlayer(data.type, data.number, coords.x, coords.y);
             } catch (err) {}
@@ -608,7 +670,6 @@
             const el = document.getElementById(`player-${id}`);
             if(el) el.classList.add('is-dragging');
 
-            // --- LOGICA DE DRIBBLING DINÁMICO ---
             dribbleState = null;
             const player = state.players.find(p => p.id === id);
             if (player && player.type !== 'Ball') { 
@@ -636,11 +697,9 @@
                             const targetDistPx = minDist + 1;
                             const newDxPx = Math.cos(theta) * targetDistPx;
                             const newDyPx = Math.sin(theta) * targetDistPx;
-                            
                             const targetBallVisualX = pCx + newDxPx - fieldRect.left;
                             const targetBallVisualY = pCy + newDyPx - fieldRect.top;
                             const targetBallCoords = calculateCoordinates(targetBallVisualX, targetBallVisualY, fieldRect.width, fieldRect.height);
-                            
                             const logicalOffsetX = targetBallCoords.x - player.x;
                             const logicalOffsetY = targetBallCoords.y - player.y;
                             
@@ -683,15 +742,10 @@
             handleMove(touch.clientX, touch.clientY);
         }
 
-        // COORDENADAS UNIFICADAS: Handle rotation logic here
         function calculateCoordinates(visualX, visualY, width, height) {
             let logicalXPercent, logicalYPercent;
 
             if (state.isVertical) {
-                // MODO VERTICAL (Rotado -90deg)
-                // Visual X -> Internal Y
-                // Visual Y -> Internal X (inverted)
-                
                 const visualPctX = (visualX / width) * 100;
                 const visualPctY = (visualY / height) * 100;
 
@@ -706,14 +760,11 @@
                         logicalXPercent = containerX / SCALE_RATIO;
                     }
                 } else {
-                    // Full Vertical: Container % es 1:1 con Logical %
                     logicalXPercent = containerX;
                 }
-                
                 logicalYPercent = containerY;
 
             } else {
-                // MODO HORIZONTAL (Estándar)
                 logicalXPercent = (visualX / width) * 100;
                 logicalYPercent = (visualY / height) * 100;
             }
@@ -728,17 +779,13 @@
 
             const coords = calculateCoordinates(visualX, visualY, rect.width, rect.height);
 
-            // Mover Jugador
             updateDOMPosition(activePlayerId, coords.x, coords.y);
 
-            // Mover Balón
             if (dribbleState) {
                 let ballX = coords.x + dribbleState.offsetX;
                 let ballY = coords.y + dribbleState.offsetY;
-                
                 ballX = Math.max(0, Math.min(100, ballX));
                 ballY = Math.max(0, Math.min(100, ballY));
-
                 updateDOMPosition(dribbleState.ballId, ballX, ballY);
                 dribbleState.lastX = ballX;
                 dribbleState.lastY = ballY;
