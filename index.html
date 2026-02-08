@@ -2,8 +2,14 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Pizarra Táctica Digital Pro</title>
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="description" content="Pizarra táctica profesional para deportes">
     
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -14,11 +20,61 @@
     <!-- Iconos -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js"></script>
 
+    <!-- PWA Loader Script -->
+    <script>
+        (function() {
+            const manifest = {
+                "name": "Pizarra Táctica Pro",
+                "short_name": "TacticsPro",
+                "start_url": ".",
+                "display": "standalone",
+                "background_color": "#0f172a",
+                "theme_color": "#0f172a",
+                "orientation": "any",
+                "icons": [{
+                    "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='100' fill='%230f172a'/%3E%3Ccircle cx='256' cy='256' r='180' fill='none' stroke='%233b82f6' stroke-width='40'/%3E%3Cpath d='M256 112v288M112 256h288' stroke='%233b82f6' stroke-width='40' stroke-linecap='round'/%3E%3C/svg%3E",
+                    "sizes": "192x192",
+                    "type": "image/svg+xml"
+                }]
+            };
+            const manifestBlob = new Blob([JSON.stringify(manifest)], {type: 'application/manifest+json'});
+            const manifestURL = URL.createObjectURL(manifestBlob);
+            const link = document.createElement('link');
+            link.rel = 'manifest';
+            link.href = manifestURL;
+            document.head.appendChild(link);
+
+            const appleIcon = document.createElement('link');
+            appleIcon.rel = 'apple-touch-icon';
+            appleIcon.href = manifest.icons[0].src;
+            document.head.appendChild(appleIcon);
+
+            if ('serviceWorker' in navigator) {
+                const swCode = `
+                    self.addEventListener('install', (e) => self.skipWaiting());
+                    self.addEventListener('activate', (e) => e.waitUntil(self.clients.claim()));
+                    self.addEventListener('fetch', (e) => {
+                        e.respondWith(fetch(e.request).catch(() => {
+                            return new Response('Modo Offline: Pizarra Activa');
+                        }));
+                    });
+                `;
+                const swBlob = new Blob([swCode], {type: 'text/javascript'});
+                const swUrl = URL.createObjectURL(swBlob);
+                window.addEventListener('load', () => {
+                    navigator.serviceWorker.register(swUrl).catch(err => console.log('SW Error:', err));
+                });
+            }
+        })();
+    </script>
+
     <style>
         body {
             font-family: 'Barlow', sans-serif;
             overflow: hidden; 
             touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
 
         .bg-tech-pattern {
@@ -43,6 +99,7 @@
             z-index: 50;
         }
 
+        /* Clase para rotar jugadores cuando el campo está vertical */
         .player-rotated {
              transform: translate(-50%, -50%) rotate(90deg) !important;
         }
@@ -55,6 +112,20 @@
             transform: translate(-50%, -50%) scale(1.3);
             z-index: 100;
             box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5);
+        }
+
+        #trash-zone {
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transform: translateY(150%);
+        }
+        #trash-zone.visible {
+            transform: translateY(0);
+        }
+        #trash-zone.drag-over {
+            transform: translateY(0) scale(1.1);
+            background-color: #ef4444;
+            border-color: #fca5a5;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.6);
         }
 
         svg {
@@ -94,7 +165,6 @@
                 </button>
             </div>
             
-            <!-- Selector Deporte con margen extra a la izquierda (ml-2 md:ml-6) -->
             <div class="flex bg-slate-800 rounded-lg p-1 border border-slate-700 shrink-0 ml-2 md:ml-6">
                  <button onclick="setSport('futsal')" id="btn-sport-futsal" class="px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow" title="Fútbol Sala">
                     <i class="fa-solid fa-futbol"></i>
@@ -195,7 +265,8 @@
         const state = {
             sport: 'futsal',
             viewMode: 'full', 
-            activeHalf: 'left', // 'left' o 'right' (Calculado automáticamente)
+            activeHalf: 'left', // 'left' o 'right'
+            isVertical: false, // Detecta si el campo debe renderizarse verticalmente
             players: [],
             nextId: 1
         };
@@ -204,12 +275,13 @@
         const fieldContainer = document.getElementById('field-container');
         const playersLayer = document.getElementById('players-layer');
 
-        // Constantes del Campo Lógico (Fuente de Verdad)
         const FULL_WIDTH = 800;
         const HALF_VIEW_WIDTH = 460; 
-
-        // Factor de Conversión de escala horizontal
         const SCALE_RATIO = FULL_WIDTH / HALF_VIEW_WIDTH;
+        // Aspect Ratio del campo lógico 800/500 = 1.6
+        const FIELD_RATIO = 1.6;
+
+        let dribbleState = null;
 
         function init() {
             fieldContainer.addEventListener('dragover', (e) => e.preventDefault());
@@ -223,18 +295,17 @@
 
             setTimeout(updateFieldZoom, 50);
             renderPlayers();
-            showToast('Arrastra fuera para eliminar');
+            showToast('PWA: Instalable en móvil/tablet');
         }
 
         // --- Vista Dinámica ---
         function setViewMode(mode) {
             state.viewMode = mode;
             
-            // Detección Automática del Lado
             if (mode === 'half') {
                 detectActiveHalf();
             } else {
-                state.activeHalf = 'left'; // Reset a default en full
+                state.activeHalf = 'left'; 
             }
             
             const btnFull = document.getElementById('btn-view-full');
@@ -246,12 +317,10 @@
             } else {
                 btnFull.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all text-slate-400 hover:text-white';
                 btnHalf.className = 'px-4 py-1 rounded text-xs md:text-sm font-semibold transition-all bg-slate-700 text-white shadow-sm';
-                
                 showToast(state.activeHalf === 'right' ? 'Mostrando Lado Derecho' : 'Mostrando Lado Izquierdo');
             }
 
             updateFieldZoom();
-            // Re-renderizamos para actualizar posiciones CSS
             renderPlayers();
         }
 
@@ -260,26 +329,20 @@
                 state.activeHalf = 'left';
                 return;
             }
-
             let sumX = 0;
             let count = 0;
             state.players.forEach(p => {
-                // Solo contamos jugadores de campo, ignoramos balones para el promedio si queremos,
-                // pero mejor contar todo para que la vista siga la acción.
                 sumX += p.x;
                 count++;
             });
-
             const avgX = sumX / count;
-            
-            // Si el promedio está más allá del 50%, mostramos la derecha
             state.activeHalf = avgX > 50 ? 'right' : 'left';
         }
 
         function updatePlayerRotationClasses() {
             const tokens = document.querySelectorAll('.player-token');
             tokens.forEach(el => {
-                if (state.viewMode === 'half') {
+                if (state.isVertical) {
                     el.classList.add('player-rotated');
                 } else {
                     el.classList.remove('player-rotated');
@@ -295,13 +358,10 @@
             if (state.viewMode === 'full') {
                 viewBox = `0 0 ${FULL_WIDTH} 500`;
             } else {
-                // Half Mode
                 if (state.activeHalf === 'right') {
-                    // Mostramos desde el final menos el ancho de la vista (800 - 460 = 340) hasta 800
-                    const startX = FULL_WIDTH - HALF_VIEW_WIDTH; // 340
+                    const startX = FULL_WIDTH - HALF_VIEW_WIDTH; 
                     viewBox = `${startX} 0 ${HALF_VIEW_WIDTH} 500`;
                 } else {
-                    // Left Side
                     viewBox = `0 0 ${HALF_VIEW_WIDTH} 500`;
                 }
             }
@@ -311,15 +371,29 @@
                 if (el) el.setAttribute('viewBox', viewBox);
             });
 
-            // Geometría para maximizar
-            const availW = canvasArea.clientWidth - (state.viewMode === 'full' ? 32 : 16); 
-            const availH = canvasArea.clientHeight - (state.viewMode === 'full' ? 32 : 16);
+            const availW = canvasArea.clientWidth - (state.viewMode === 'full' ? 16 : 8); 
+            const availH = canvasArea.clientHeight - (state.viewMode === 'full' ? 16 : 8);
+
+            // DETECCIÓN DE ORIENTACIÓN
+            // Es vertical si la vista es 'half' o si el área disponible es más alta que ancha (móvil)
+            state.isVertical = state.viewMode === 'half' || (availH > availW);
 
             let targetW, targetH, rotation;
 
-            if (state.viewMode === 'half') {
-                // MODO VERTICAL (-90deg)
-                const visualRatio = 500 / HALF_VIEW_WIDTH; 
+            if (state.isVertical) {
+                // MODO VERTICAL (Rotado -90deg)
+                // Ratio visual:
+                // Si es Half mode: 500 / 460
+                // Si es Full mode (en móvil): 500 / 800 (porque el lado 500 es el ancho visual, y 800 el alto visual)
+                // No, el SVG sigue siendo el mismo.
+                // Si rotamos Full Field: El div ancho se vuelve altura visual.
+                // Ancho Visual = 500 units. Alto Visual = 800 units.
+                // Ratio = 500 / 800 = 0.625
+                
+                let logicalW = 500;
+                let logicalH = state.viewMode === 'half' ? HALF_VIEW_WIDTH : FULL_WIDTH;
+                
+                const visualRatio = logicalW / logicalH; 
                 const screenRatio = availW / availH;
 
                 let renderW, renderH; // Dimensiones visuales finales deseadas
@@ -332,12 +406,25 @@
                     renderH = renderW / visualRatio;
                 }
                 
+                // Al rotar -90deg: Width CSS = renderH, Height CSS = renderW
                 targetW = renderH; 
                 targetH = renderW;
                 rotation = 'rotate(-90deg)';
+                
+                // Jugadores Layer
+                // Si es Half mode: Capa escalada (SCALE_RATIO %)
+                // Si es Full mode vertical: Capa normal 100%
+                if (state.viewMode === 'half') {
+                    const scalePercent = (FULL_WIDTH / HALF_VIEW_WIDTH) * 100;
+                    playersLayer.style.width = `${scalePercent}%`;
+                } else {
+                    playersLayer.style.width = '100%';
+                }
+                playersLayer.style.height = '100%';
 
             } else {
-                // MODO FULL
+                // MODO HORIZONTAL (Standard)
+                // Logical W = 800, H = 500
                 const visualRatio = FULL_WIDTH / 500;
                 const screenRatio = availW / availH;
 
@@ -349,6 +436,9 @@
                     targetH = targetW / visualRatio;
                 }
                 rotation = 'none';
+                
+                playersLayer.style.width = '100%';
+                playersLayer.style.height = '100%';
             }
 
             fieldContainer.style.width = `${targetW}px`;
@@ -363,7 +453,6 @@
             const btnFutsal = document.getElementById('btn-sport-futsal');
             const btnBasket = document.getElementById('btn-sport-basket');
             
-            // Actualización de clases para incluir soporte de texto y espaciado (gap-2, px-3, py-1)
             btnFutsal.className = sportName === 'futsal' 
                 ? 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 bg-blue-600 text-white shadow' 
                 : 'px-3 py-1 rounded text-xs md:text-sm font-semibold transition-all flex items-center justify-center gap-2 text-slate-500 hover:text-blue-400';
@@ -398,7 +487,7 @@
                 id: state.nextId++,
                 type: type,
                 number: finalNumber,
-                x: xPercent, // SIEMPRE guardamos respecto a 800x500
+                x: xPercent,
                 y: yPercent
             };
             state.players.push(player);
@@ -406,22 +495,32 @@
         }
 
         function addPlayerClick(type, number) {
-            // Añadir en el centro lógico del campo visible actual
             let centerX = 50;
-            
             if (state.viewMode === 'half') {
-                if (state.activeHalf === 'right') {
-                    // Centro de la derecha (aprox 75%)
-                    // Exacto: Centro de 340-800 es (340+800)/2 = 570. 570/800 = 71.25%
-                    centerX = 71.25;
-                } else {
-                    // Centro de la izquierda (aprox 25%)
-                    centerX = 28.75;
-                }
+                centerX = state.activeHalf === 'right' ? 71.25 : 28.75;
             }
-            
             const rand = () => (Math.random() * 6) - 3;
             createPlayer(type, number, centerX + rand(), 50 + rand());
+        }
+
+        function updateDOMPosition(id, logicalX, logicalY) {
+            const el = document.getElementById(`player-${id}`);
+            if (!el) return;
+
+            let cssLeft = logicalX;
+            // Si estamos en half mode, hay que escalar la coordenada X visual
+            // Si estamos en full mode vertical, NO hay que escalar porque el contenedor es 100% lógico
+            if (state.viewMode === 'half') {
+                if (state.activeHalf === 'right') {
+                    const logicalUnits = (logicalX / 100) * FULL_WIDTH; 
+                    const visualPct = ((logicalUnits - (FULL_WIDTH - HALF_VIEW_WIDTH)) / HALF_VIEW_WIDTH) * 100;
+                    cssLeft = visualPct;
+                } else {
+                    cssLeft = logicalX * SCALE_RATIO;
+                }
+            }
+            el.style.left = `${cssLeft}%`;
+            el.style.top = `${logicalY}%`;
         }
 
         function renderOnePlayer(player) {
@@ -446,32 +545,13 @@
                 playersLayer.appendChild(el);
             }
 
-            // --- LÓGICA DE POSICIONAMIENTO VISUAL ---
-            let cssLeft = player.x;
-            
-            if (state.viewMode === 'half') {
-                // Cálculo especial para media cancha
-                if (state.activeHalf === 'right') {
-                    // Mapeamos el rango 340-800 (lógico) a 0-100% (visual container)
-                    // Container Width = 460 units.
-                    // X units relative to view = PlayerLogicalXUnits - 340.
-                    // Visual % = (PlayerLogicalXUnits - 340) / 460 * 100
-                    
-                    const logicalUnits = (player.x / 100) * FULL_WIDTH; // De 0 a 800
-                    const visualPct = ((logicalUnits - (FULL_WIDTH - HALF_VIEW_WIDTH)) / HALF_VIEW_WIDTH) * 100;
-                    cssLeft = visualPct;
-                    
-                } else {
-                    // Left Mode: Mapeamos 0-460 a 0-100%
-                    cssLeft = player.x * SCALE_RATIO;
-                }
+            if (state.isVertical) {
                 el.classList.add('player-rotated');
             } else {
                 el.classList.remove('player-rotated');
             }
 
-            el.style.left = `${cssLeft}%`;
-            el.style.top = `${player.y}%`;
+            updateDOMPosition(player.id, player.x, player.y);
         }
 
         function renderPlayers() {
@@ -528,6 +608,60 @@
             const el = document.getElementById(`player-${id}`);
             if(el) el.classList.add('is-dragging');
 
+            // --- LOGICA DE DRIBBLING DINÁMICO ---
+            dribbleState = null;
+            const player = state.players.find(p => p.id === id);
+            if (player && player.type !== 'Ball') { 
+                const ball = state.players.find(p => p.type === 'Ball');
+                if (ball) {
+                    const pEl = document.getElementById(`player-${id}`);
+                    const bEl = document.getElementById(`player-${ball.id}`);
+                    
+                    if (pEl && bEl) {
+                        const pRect = pEl.getBoundingClientRect();
+                        const bRect = bEl.getBoundingClientRect();
+                        const pCx = pRect.left + pRect.width/2;
+                        const pCy = pRect.top + pRect.height/2;
+                        const bCx = bRect.left + bRect.width/2;
+                        const bCy = bRect.top + bRect.height/2;
+                        
+                        const dxPx = bCx - pCx;
+                        const dyPx = bCy - pCy;
+                        const distPx = Math.sqrt(dxPx*dxPx + dyPx*dyPx);
+                        const minDist = (pRect.width/2) + (bRect.width/2); 
+                        
+                        if (distPx < minDist + 25) {
+                            const fieldRect = fieldContainer.getBoundingClientRect();
+                            const theta = Math.atan2(dyPx, dxPx);
+                            const targetDistPx = minDist + 1;
+                            const newDxPx = Math.cos(theta) * targetDistPx;
+                            const newDyPx = Math.sin(theta) * targetDistPx;
+                            
+                            const targetBallVisualX = pCx + newDxPx - fieldRect.left;
+                            const targetBallVisualY = pCy + newDyPx - fieldRect.top;
+                            const targetBallCoords = calculateCoordinates(targetBallVisualX, targetBallVisualY, fieldRect.width, fieldRect.height);
+                            
+                            const logicalOffsetX = targetBallCoords.x - player.x;
+                            const logicalOffsetY = targetBallCoords.y - player.y;
+                            
+                            dribbleState = {
+                                ballId: ball.id,
+                                offsetX: logicalOffsetX,
+                                offsetY: logicalOffsetY
+                            };
+                            
+                            let snapX = player.x + logicalOffsetX;
+                            let snapY = player.y + logicalOffsetY;
+                            snapX = Math.max(0, Math.min(100, snapX));
+                            snapY = Math.max(0, Math.min(100, snapY));
+                            ball.x = snapX;
+                            ball.y = snapY;
+                            updateDOMPosition(ball.id, snapX, snapY);
+                        }
+                    }
+                }
+            }
+
             if (touchMode) {
                 window.addEventListener('touchmove', movePlayerTouch, {passive: false});
                 window.addEventListener('touchend', stopMoving);
@@ -549,31 +683,31 @@
             handleMove(touch.clientX, touch.clientY);
         }
 
-        // Función matemática unificada: Visual (Pixels) -> Lógico (% de 800)
+        // COORDENADAS UNIFICADAS: Handle rotation logic here
         function calculateCoordinates(visualX, visualY, width, height) {
             let logicalXPercent, logicalYPercent;
 
-            if (state.viewMode === 'half') {
-                // MODO VERTICAL (-90deg)
+            if (state.isVertical) {
+                // MODO VERTICAL (Rotado -90deg)
+                // Visual X -> Internal Y
+                // Visual Y -> Internal X (inverted)
                 
                 const visualPctX = (visualX / width) * 100;
                 const visualPctY = (visualY / height) * 100;
 
-                // 1. Mapeo inverso de rotación -90deg
                 let containerX = 100 - visualPctY; 
                 let containerY = visualPctX;
 
-                // 2. Normalización a Campo Completo (800)
-                if (state.activeHalf === 'right') {
-                    // Container representa 340 a 800 (460 ancho)
-                    // 0% container = 340 units
-                    // 100% container = 800 units
-                    // Units = (containerX / 100 * 460) + 340
-                    const logicalUnits = (containerX / 100 * HALF_VIEW_WIDTH) + (FULL_WIDTH - HALF_VIEW_WIDTH);
-                    logicalXPercent = (logicalUnits / FULL_WIDTH) * 100;
+                if (state.viewMode === 'half') {
+                    if (state.activeHalf === 'right') {
+                        const logicalUnits = (containerX / 100 * HALF_VIEW_WIDTH) + (FULL_WIDTH - HALF_VIEW_WIDTH);
+                        logicalXPercent = (logicalUnits / FULL_WIDTH) * 100;
+                    } else {
+                        logicalXPercent = containerX / SCALE_RATIO;
+                    }
                 } else {
-                    // Left Mode
-                    logicalXPercent = containerX / SCALE_RATIO;
+                    // Full Vertical: Container % es 1:1 con Logical %
+                    logicalXPercent = containerX;
                 }
                 
                 logicalYPercent = containerY;
@@ -594,23 +728,20 @@
 
             const coords = calculateCoordinates(visualX, visualY, rect.width, rect.height);
 
-            // Actualización visual durante el arrastre
-            let cssLeft = coords.x;
-            
-            if (state.viewMode === 'half') {
-                if (state.activeHalf === 'right') {
-                    const logicalUnits = (coords.x / 100) * FULL_WIDTH; 
-                    const visualPct = ((logicalUnits - (FULL_WIDTH - HALF_VIEW_WIDTH)) / HALF_VIEW_WIDTH) * 100;
-                    cssLeft = visualPct;
-                } else {
-                    cssLeft = coords.x * SCALE_RATIO;
-                }
-            }
+            // Mover Jugador
+            updateDOMPosition(activePlayerId, coords.x, coords.y);
 
-            const el = document.getElementById(`player-${activePlayerId}`);
-            if (el) {
-                el.style.left = `${cssLeft}%`;
-                el.style.top = `${coords.y}%`;
+            // Mover Balón
+            if (dribbleState) {
+                let ballX = coords.x + dribbleState.offsetX;
+                let ballY = coords.y + dribbleState.offsetY;
+                
+                ballX = Math.max(0, Math.min(100, ballX));
+                ballY = Math.max(0, Math.min(100, ballY));
+
+                updateDOMPosition(dribbleState.ballId, ballX, ballY);
+                dribbleState.lastX = ballX;
+                dribbleState.lastY = ballY;
             }
         }
 
@@ -623,28 +754,81 @@
             let clientX = isTouch ? e.changedTouches[0].clientX : e.clientX;
             let clientY = isTouch ? e.changedTouches[0].clientY : e.clientY;
 
-            // Verificar si soltó fuera
             const fieldRect = fieldContainer.getBoundingClientRect();
             const isInside = (clientX >= fieldRect.left && clientX <= fieldRect.right &&
                               clientY >= fieldRect.top && clientY <= fieldRect.bottom);
 
             if (!isInside) {
                 removePlayer(activePlayerId);
+                if (dribbleState && typeof dribbleState.lastX !== 'undefined') {
+                     const bIndex = state.players.findIndex(p => p.id === dribbleState.ballId);
+                     if (bIndex !== -1) {
+                         state.players[bIndex].x = dribbleState.lastX;
+                         state.players[bIndex].y = dribbleState.lastY;
+                         renderOnePlayer(state.players[bIndex]);
+                     }
+                }
             } else {
                 if(el) {
-                    const coords = calculateCoordinates(clientX - fieldRect.left, clientY - fieldRect.top, fieldRect.width, fieldRect.height);
+                    const movedObj = state.players.find(p => p.id === activePlayerId);
                     
+                    if (movedObj && movedObj.type === 'Ball') {
+                        const ballRect = el.getBoundingClientRect();
+                        const ballCenter = { x: ballRect.left + ballRect.width/2, y: ballRect.top + ballRect.height/2 };
+                        const ballRadius = ballRect.width / 2;
+
+                        let nearest = null;
+                        let minDist = Infinity;
+
+                        state.players.forEach(p => {
+                            if (p.type === 'Ball' || p.id === activePlayerId) return;
+                            const pEl = document.getElementById(`player-${p.id}`);
+                            if (!pEl) return;
+                            const pRect = pEl.getBoundingClientRect();
+                            const pCenter = { x: pRect.left + pRect.width/2, y: pRect.top + pRect.height/2 };
+                            const pRadius = pRect.width / 2;
+                            const dx = ballCenter.x - pCenter.x;
+                            const dy = ballCenter.y - pCenter.y;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                            const minDistRequired = pRadius + ballRadius; 
+                            
+                            if (dist < minDistRequired + 15) { 
+                                if (dist < minDist) {
+                                    minDist = dist;
+                                    nearest = { pCenter, minDistRequired, dx, dy };
+                                }
+                            }
+                        });
+
+                        if (nearest) {
+                            const angle = Math.atan2(nearest.dy, nearest.dx);
+                            const targetDist = nearest.minDistRequired + 1; 
+                            const newBallScreenX = nearest.pCenter.x + Math.cos(angle) * targetDist;
+                            const newBallScreenY = nearest.pCenter.y + Math.sin(angle) * targetDist;
+                            clientX = newBallScreenX;
+                            clientY = newBallScreenY;
+                        }
+                    }
+
+                    const coords = calculateCoordinates(clientX - fieldRect.left, clientY - fieldRect.top, fieldRect.width, fieldRect.height);
                     const pIndex = state.players.findIndex(p => p.id === activePlayerId);
                     if (pIndex !== -1) {
                         state.players[pIndex].x = coords.x;
                         state.players[pIndex].y = coords.y;
                     }
-                    
+                    if (dribbleState && typeof dribbleState.lastX !== 'undefined') {
+                         const bIndex = state.players.findIndex(p => p.id === dribbleState.ballId);
+                         if (bIndex !== -1) {
+                             state.players[bIndex].x = dribbleState.lastX;
+                             state.players[bIndex].y = dribbleState.lastY;
+                         }
+                    }
                     renderOnePlayer(state.players[pIndex]);
                 }
             }
 
             activePlayerId = null;
+            dribbleState = null; 
             isTouch = false;
             
             window.removeEventListener('mousemove', movePlayerMouse);
